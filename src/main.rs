@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::pbr::DistanceFog;
 
 mod ai;
 mod camera;
@@ -8,11 +9,15 @@ mod factory;
 mod player;
 mod possession;
 mod resources;
+mod scenery;
 mod ui;
 mod util;
 
 use components::*;
 use resources::*;
+
+/// Grass green used for ground, fog, and clear color so edges blend seamlessly.
+const GRASS_COLOR: Color = Color::srgb(0.25, 0.35, 0.2);
 
 fn main() {
     App::new()
@@ -24,12 +29,13 @@ fn main() {
             }),
             ..default()
         }))
+        .insert_resource(ClearColor(GRASS_COLOR))
         .add_plugins(ui::UiPlugin)
         // State & resources
         .init_state::<CameraMode>()
         .init_resource::<SavedCameraTransform>()
         // Setup
-        .add_systems(Startup, setup_world)
+        .add_systems(Startup, (setup_world, scenery::spawn_scenery))
         // Restore camera when returning to RTS
         .add_systems(OnEnter(CameraMode::Rts), possession::restore_camera_on_unpossess)
         // RTS mode systems
@@ -102,9 +108,9 @@ fn setup_world(
 
     // Ground plane
     commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(120.0, 120.0))),
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(300.0, 300.0))),
         MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(0.25, 0.35, 0.2),
+            base_color: GRASS_COLOR,
             ..default()
         })),
         Transform::from_translation(Vec3::ZERO),
@@ -119,6 +125,7 @@ fn setup_world(
         },
         Transform::default().looking_at(Vec3::new(-1.0, -2.0, -1.5), Vec3::Y),
     ));
+
 
     // --- Red team ---
     let red_base_pos = Team::Red.base_position();
@@ -181,6 +188,21 @@ fn setup_world(
         Camera3d::default(),
         Transform::from_xyz(0.0, 80.0, 50.0).looking_at(Vec3::ZERO, Vec3::Y),
         RtsCamera,
+        // Ambient fill so shadows aren't pitch black
+        AmbientLight {
+            color: Color::srgb(0.9, 0.95, 1.0),
+            brightness: 400.0,
+            ..default()
+        },
+        // Distance fog blends ground edges into the sky color for a seamless horizon
+        DistanceFog {
+            color: GRASS_COLOR,
+            falloff: FogFalloff::Linear {
+                start: 100.0,
+                end: 180.0,
+            },
+            ..default()
+        },
     ));
 }
 
